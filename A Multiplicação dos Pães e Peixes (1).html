@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>A Multiplicação dos Pães e Peixes</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Tone.js for Sound Synthesizers & Background Music -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/tone/14.8.49/Tone.js"></script>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-touch-callout: none;
+        }
+        body {
+            font-family: 'Fredoka', sans-serif;
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 50%, #7dd3fc 100%);
+            touch-action: manipulation;
+        }
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+            cursor: pointer;
+        }
+        .btn-play {
+            background: linear-gradient(to bottom, #fde047, #eab308);
+            box-shadow: 0 5px 0 #ca8a04, 0 10px 15px rgba(0,0,0,0.15);
+        }
+        .btn-play:active {
+            transform: translateY(3px);
+            box-shadow: 0 2px 0 #ca8a04, 0 5px 10px rgba(0,0,0,0.1);
+        }
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.90);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+        }
+        .pulse-anim {
+            animation: pulse 1.8s infinite ease-in-out;
+        }
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+        }
+    </style>
+</head>
+<body class="h-screen w-screen flex items-center justify-center overflow-hidden p-2 sm:p-4 select-none">
+
+    <!-- Elemento de Áudio Opcional com Arquivo Local -->
+    <audio id="bgAudio" loop preload="auto">
+        <source src="NO PRINCÍPIO.mp3" type="audio/mpeg">
+        <source src="NO_PRINCIPIO_2.mp3" type="audio/mpeg">
+    </audio>
+
+    <!-- Container Principal do Jogo -->
+    <div id="gameWrapper" class="relative w-full max-w-md h-[92vh] max-h-[850px] bg-sky-200 rounded-3xl overflow-hidden shadow-2xl border-4 border-sky-400/80 flex flex-col">
+        
+        <!-- HUD (Cabeçalho com Pontuação e Status) -->
+        <div class="absolute top-0 left-0 w-full p-3 sm:p-4 flex justify-between items-center z-10 glass-panel rounded-b-2xl shadow-md border-b border-sky-200">
+            <div class="flex flex-col">
+                <span class="text-sky-900 text-xs font-bold uppercase tracking-wider">Alimentados 🍞</span>
+                <span id="scoreDisplay" class="text-2xl sm:text-3xl text-sky-700 font-extrabold leading-none">0</span>
+            </div>
+
+            <!-- Nível / Combo Badge -->
+            <div class="flex flex-col items-center">
+                <span class="text-amber-800 text-[10px] font-bold uppercase tracking-wider">Combo</span>
+                <span id="comboDisplay" class="text-lg font-bold text-amber-600 bg-amber-100 px-2.5 py-0.5 rounded-full border border-amber-300">x1</span>
+            </div>
+            
+            <!-- Botão de Alternar Som e Música -->
+            <button id="muteBtn" title="Alternar Som e Música" class="bg-white hover:bg-sky-50 text-sky-900 p-2 rounded-2xl shadow-sm border-2 border-sky-300 text-xl w-11 h-11 flex items-center justify-center transition-all active:scale-95">
+                🔊
+            </button>
+
+            <!-- Vidas -->
+            <div class="flex flex-col items-end">
+                <span class="text-rose-900 text-xs font-bold uppercase tracking-wider">Vidas</span>
+                <div id="livesDisplay" class="text-xl sm:text-2xl tracking-tight">❤️❤️❤️</div>
+            </div>
+        </div>
+
+        <!-- Canvas do Jogo -->
+        <canvas id="gameCanvas" class="w-full h-full"></canvas>
+
+        <!-- Overlay de Menu Inicial & Game Over -->
+        <div id="overlay" class="absolute inset-0 bg-sky-950/70 backdrop-blur-sm flex flex-col items-center justify-center z-20 p-5 text-center transition-all duration-300">
+            <div class="glass-panel p-6 sm:p-8 rounded-3xl shadow-2xl max-w-sm w-full border-2 border-white flex flex-col items-center">
+                
+                <!-- Ícone animado do topo -->
+                <div class="text-5xl mb-2 pulse-anim">🧺✨</div>
+                
+                <h1 id="titleText" class="text-2xl sm:text-3xl font-extrabold text-sky-800 mb-1 leading-tight">
+                    Multiplicação dos Pães
+                </h1>
+                <p id="descText" class="text-slate-600 mb-5 text-sm sm:text-base leading-relaxed">
+                    Mova o cesto para recolher os <b>Pães 🍞</b> e <b>Peixes 🐟</b> que caem do céu! Não os deixe cair no chão.
+                </p>
+
+                <!-- Recorde / Highscore -->
+                <div class="flex justify-between w-full bg-sky-50 p-3 rounded-2xl border border-sky-200 mb-5 text-xs font-semibold text-sky-900">
+                    <span>🏆 Recorde Atual:</span>
+                    <span id="highScoreDisplay" class="font-bold text-amber-600 text-sm">0</span>
+                </div>
+
+                <!-- Placar Final (Escondido inicialmente) -->
+                <div id="finalScoreContainer" class="hidden mb-5 bg-amber-50 p-3.5 rounded-2xl border-2 border-amber-200 w-full text-center">
+                    <p class="text-xs font-bold text-amber-800 uppercase tracking-wide">Pessoas Alimentadas</p>
+                    <p id="finalScore" class="text-4xl font-extrabold text-amber-600 my-0.5">0</p>
+                    <p id="comboMaxText" class="text-xs text-amber-700 font-medium">Maior Combo: x1</p>
+                </div>
+
+                <!-- Botão Iniciar / Jogar Novamente -->
+                <button id="startBtn" class="btn-play w-full py-3.5 rounded-xl text-lg font-extrabold text-amber-950 transition-all uppercase tracking-wide active:scale-95">
+                    Jogar Agora!
+                </button>
+            </div>
+        </div>
+
+        <!-- Controles para Mobile / Telas Sensíveis ao Toque -->
+        <div class="absolute bottom-3 left-0 w-full flex justify-between px-5 z-10 pointer-events-none">
+            <button id="btnLeft" class="pointer-events-auto bg-white/80 hover:bg-white active:scale-90 transition-transform w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-lg border-2 border-sky-400/60 text-sky-800 select-none cursor-pointer">
+                ⬅️
+            </button>
+            <button id="btnRight" class="pointer-events-auto bg-white/80 hover:bg-white active:scale-90 transition-transform w-14 h-14 rounded-2xl flex items-center justify-center text-2xl shadow-lg border-2 border-sky-400/60 text-sky-800 select-none cursor-pointer">
+                ➡️
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // Referências do DOM
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        const overlay = document.getElementById('overlay');
+        const startBtn = document.getElementById('startBtn');
+        const muteBtn = document.getElementById('muteBtn');
+        const scoreDisplay = document.getElementById('scoreDisplay');
+        const comboDisplay = document.getElementById('comboDisplay');
+        const livesDisplay = document.getElementById('livesDisplay');
+        const titleText = document.getElementById('titleText');
+        const descText = document.getElementById('descText');
+        const finalScoreContainer = document.getElementById('finalScoreContainer');
+        const finalScore = document.getElementById('finalScore');
+        const comboMaxText = document.getElementById('comboMaxText');
+        const highScoreDisplay = document.getElementById('highScoreDisplay');
+
+        const btnLeft = document.getElementById('btnLeft');
+        const btnRight = document.getElementById('btnRight');
+        const bgAudio = document.getElementById('bgAudio');
+
+        // Estado do Jogo
+        let gameRunning = false;
+        let score = 0;
+        let lives = 3;
+        let combo = 1;
+        let maxCombo = 1;
+        let highScore = parseInt(localStorage.getItem('multiplicacao_highscore') || '0', 10);
+        let animationFrameId = null;
+
+        // Configuração de Dificuldade
+        let spawnTimer = 0;
+        let spawnInterval = 90; // frames
+        let baseFallSpeed = 2.5;
+
+        // Controle do Áudio
+        let isMuted = false;
+        let audioInitialized = false;
+        let synthCatch, synthMiss, synthBonus, synthGameOver;
+        let bgMelodySynth, bgBassSynth, musicLoop, musicSequence;
+
+        highScoreDisplay.innerText = highScore;
+
+        // Redimensionar Canvas
+        function resizeCanvas() {
+            const rect = canvas.getBoundingClientRect();
+            canvas.width = rect.width;
+            canvas.height = rect.height;
+        }
+        window.addEventListener('resize', resizeCanvas);
+        resizeCanvas();
+
+        // Inicialização do Áudio com Tone.js
+        function initAudio() {
+            if (audioInitialized) return;
+            try {
+                Tone.start();
+
+                // Sintetizadores para Efeitos Sonoros
+                synthCatch = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: "triangle" },
+                    envelope: { attack: 0.01, decay: 0.1, sustain: 0.1, release: 0.2 }
+                }).toDestination();
+                synthCatch.volume.value = -6;
+
+                synthMiss = new Tone.MembraneSynth().toDestination();
+                synthMiss.volume.value = -4;
+
+                synthBonus = new Tone.Synth({
+                    oscillator: { type: "sine" },
+                    envelope: { attack: 0.01, decay: 0.3, sustain: 0.2, release: 0.4 }
+                }).toDestination();
+                synthBonus.volume.value = -4;
+
+                synthGameOver = new Tone.PolySynth(Tone.Synth).toDestination();
+
+                // Sintetizadores para Música de Fundo (Alegre e Inspiradora)
+                bgMelodySynth = new Tone.PolySynth(Tone.Synth, {
+                    oscillator: { type: "sine" },
+                    envelope: { attack: 0.05, decay: 0.2, sustain: 0.3, release: 0.8 }
+                }).toDestination();
+                bgMelodySynth.volume.value = -16;
+
+                bgBassSynth = new Tone.Synth({
+                    oscillator: { type: "triangle" },
+                    envelope: { attack: 0.08, decay: 0.3, sustain: 0.5, release: 0.6 }
+                }).toDestination();
+                bgBassSynth.volume.value = -18;
+
+                // Sequência Melódica Suave e Harmoniosa (Tom de C Maior / Pentatônico)
+                const melodyNotes = [
+                    { time: "0:0", note: "C5", duration: "8n" },
+                    { time: "0:0:2", note: "E5", duration: "8n" },
+                    { time: "0:1", note: "G5", duration: "8n" },
+                    { time: "0:1:2", note: "E5", duration: "8n" },
+                    { time: "0:2", note: "A5", duration: "8n" },
+                    { time: "0:2:2", note: "G5", duration: "8n" },
+                    { time: "0:3", note: "E5", duration: "8n" },
+                    { time: "0:3:2", note: "D5", duration: "8n" },
+
+                    { time: "1:0", note: "C5", duration: "8n" },
+                    { time: "1:0:2", note: "D5", duration: "8n" },
+                    { time: "1:1", note: "E5", duration: "8n" },
+                    { time: "1:1:2", note: "G5", duration: "8n" },
+                    { time: "1:2", note: "D5", duration: "4n" },
+                    { time: "1:3", note: "C5", duration: "4n" },
+
+                    { time: "2:0", note: "F5", duration: "8n" },
+                    { time: "2:0:2", note: "A5", duration: "8n" },
+                    { time: "2:1", note: "C6", duration: "8n" },
+                    { time: "2:1:2", note: "A5", duration: "8n" },
+                    { time: "2:2", note: "G5", duration: "8n" },
+                    { time: "2:2:2", note: "E5", duration: "8n" },
+                    { time: "2:3", note: "D5", duration: "8n" },
+                    { time: "2:3:2", note: "C5", duration: "8n" },
+
+                    { time: "3:0", note: "D5", duration: "8n" },
+                    { time: "3:0:2", note: "E5", duration: "8n" },
+                    { time: "3:1", note: "G5", duration: "4n" },
+                    { time: "3:2", note: "C5", duration: "2n" }
+                ];
+
+                const bassNotes = [
+                    { time: "0:0", note: "C3", duration: "2n" },
+                    { time: "0:2", note: "G3", duration: "2n" },
+                    { time: "1:0", note: "A3", duration: "2n" },
+                    { time: "1:2", note: "F3", duration: "2n" },
+                    { time: "2:0", note: "F3", duration: "2n" },
+                    { time: "2:2", note: "C3", duration: "2n" },
+                    { time: "3:0", note: "G3", duration: "2n" },
+                    { time: "3:2", note: "C3", duration: "2n" }
+                ];
+
+                musicSequence = new Tone.Part((time, value) => {
+                    if (!isMuted && gameRunning) {
+                        bgMelodySynth.triggerAttackRelease(value.note, value.duration, time);
+                    }
+                }, melodyNotes);
+                musicSequence.loop = true;
+                musicSequence.loopEnd = "4m";
+
+                const bassSequence = new Tone.Part((time, value) => {
+                    if (!isMuted && gameRunning) {
+                        bgBassSynth.triggerAttackRelease(value.note, value.duration, time);
+                    }
+                }, bassNotes);
+                bassSequence.loop = true;
+                bassSequence.loopEnd = "4m";
+
+                Tone.Transport.bpm.value = 115;
+                musicSequence.start(0);
+                bassSequence.start(0);
+
+                audioInitialized = true;
+            } catch (e) {
+                console.warn("Áudio Tone.js não pôde ser inicializado automaticamente:", e);
+            }
+        }
+
+        function playSound(type, pitch = "C5") {
+            if (isMuted || !audioInitialized) return;
+            try {
+                if (type === 'catch') {
+                    synthCatch.triggerAttackRelease(pitch, "16n");
+                } else if (type === 'miss') {
+                    synthMiss.triggerAttackRelease("G1", "8n");
+                } else if (type === 'bonus') {
+                    synthBonus.triggerAttackRelease("E6", "8n");
+                } else if (type === 'gameover') {
+                    synthGameOver.triggerAttackRelease(["C3", "Eb3", "G3", "Bb3"], "2n");
+                }
+            } catch (err) {}
+        }
+
+        function playBgMusic() {
+            if (isMuted) return;
+
+            // Inicia o áudio via Web Audio API (Tone.js Transport)
+            if (audioInitialized) {
+                Tone.Transport.start();
+            }
+
+            // Fallback de áudio se houver MP3 disponível
+            if (bgAudio) {
+                bgAudio.volume = 0.4;
+                bgAudio.currentTime = bgAudio.currentTime || 0;
+                bgAudio.play().catch(err => {
+                    console.log("Música Tone.js ativa como trilha principal.");
+                });
+            }
+        }
+
+        function stopBgMusic() {
+            if (audioInitialized) {
+                Tone.Transport.stop();
+            }
+            if (bgAudio) {
+                bgAudio.pause();
+            }
+        }
+
+        // Alternar Mute
+        muteBtn.addEventListener('click', () => {
+            isMuted = !isMuted;
+            muteBtn.innerText = isMuted ? '🔇' : '🔊';
+            if (isMuted) {
+                stopBgMusic();
+            } else if (gameRunning) {
+                playBgMusic();
+            }
+        });
+
+        // Objeto do Cesto (Jogador)
+        const basket = {
+            x: canvas.width / 2,
+            y: canvas.height - 70,
+            width: 90,
+            height: 45,
+            speed: 7,
+            dx: 0,
+            targetX: canvas.width / 2,
+            
+            update() {
+                // Suavização do movimento
+                this.x += (this.targetX - this.x) * 0.25;
+                this.x += this.dx;
+
+                // Limites da tela
+                if (this.x - this.width / 2 < 10) this.x = this.width / 2 + 10;
+                if (this.x + this.width / 2 > canvas.width - 10) this.x = canvas.width - this.width / 2 - 10;
+                
+                this.y = canvas.height - 75;
+            },
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+
+                // Sombra do Cesto
+                ctx.fillStyle = 'rgba(0, 0, 0, 0.15)';
+                ctx.beginPath();
+                ctx.ellipse(0, 22, this.width / 2 + 5, 10, 0, 0, Math.PI * 2);
+                ctx.fill();
+
+                // Corpo Principal do Cesto
+                const w = this.width;
+                const h = this.height;
+
+                ctx.fillStyle = '#b45309';
+                ctx.beginPath();
+                ctx.moveTo(-w / 2, -h / 2);
+                ctx.lineTo(w / 2, -h / 2);
+                ctx.quadraticCurveTo(w / 2 - 5, h / 2, w / 2 - 15, h / 2);
+                ctx.lineTo(-w / 2 + 15, h / 2);
+                ctx.quadraticCurveTo(-w / 2 + 5, -h / 2, -w / 2, -h / 2);
+                ctx.closePath();
+                ctx.fill();
+
+                // Textura trançada de palha
+                ctx.strokeStyle = '#f59e0b';
+                ctx.lineWidth = 3;
+                ctx.stroke();
+
+                ctx.strokeStyle = '#78350f';
+                ctx.lineWidth = 1.5;
+                for (let i = -w / 2 + 10; i < w / 2 - 10; i += 12) {
+                    ctx.beginPath();
+                    ctx.moveTo(i, -h / 2 + 2);
+                    ctx.lineTo(i * 0.7, h / 2 - 2);
+                    ctx.stroke();
+                }
+
+                // Borda do Cesto
+                ctx.fillStyle = '#f59e0b';
+                ctx.beginPath();
+                ctx.roundRect(-w / 2 - 4, -h / 2 - 6, w + 8, 10, 5);
+                ctx.fill();
+                ctx.strokeStyle = '#78350f';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+
+                ctx.restore();
+            }
+        };
+
+        // Lista de Itens caindo e Partículas
+        let items = [];
+        let particles = [];
+        let floatingTexts = [];
+
+        // Tipos de Itens
+        const ITEM_TYPES = {
+            BREAD: { type: 'bread', points: 10, emoji: '🍞', color: '#f59e0b' },
+            FISH: { type: 'fish', points: 15, emoji: '🐟', color: '#38bdf8' },
+            GOLDEN_BREAD: { type: 'golden', points: 30, emoji: '🥖', color: '#fbbf24' },
+            ROCK: { type: 'rock', points: -10, emoji: '🪨', color: '#64748b' }
+        };
+
+        class Item {
+            constructor() {
+                this.x = Math.random() * (canvas.width - 60) + 30;
+                this.y = -30;
+                this.size = 28;
+
+                const rand = Math.random() * 100;
+                if (rand < 50) this.info = ITEM_TYPES.BREAD;
+                else if (rand < 85) this.info = ITEM_TYPES.FISH;
+                else if (rand < 95) this.info = ITEM_TYPES.GOLDEN_BREAD;
+                else this.info = ITEM_TYPES.ROCK;
+
+                this.speed = baseFallSpeed + Math.random() * 1.5;
+                if (this.info.type === 'fish') {
+                    this.sway = Math.random() * 2 + 1;
+                    this.swaySpeed = Math.random() * 0.05 + 0.02;
+                    this.initialX = this.x;
+                }
+                this.angle = 0;
+            }
+
+            update() {
+                this.y += this.speed;
+                this.angle += 0.02;
+
+                if (this.info.type === 'fish') {
+                    this.x = this.initialX + Math.sin(this.y * this.swaySpeed) * 20;
+                }
+            }
+
+            draw() {
+                ctx.save();
+                ctx.translate(this.x, this.y);
+                ctx.rotate(Math.sin(this.angle) * 0.15);
+
+                if (this.info.type === 'golden') {
+                    ctx.shadowColor = '#fbbf24';
+                    ctx.shadowBlur = 12;
+                }
+
+                ctx.font = `${this.size}px Fredoka, sans-serif`;
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                ctx.fillText(this.info.emoji, 0, 0);
+
+                ctx.restore();
+            }
+        }
+
+        // Partículas ao pegar
+        class Particle {
+            constructor(x, y, color) {
+                this.x = x;
+                this.y = y;
+                this.vx = (Math.random() - 0.5) * 6;
+                this.vy = (Math.random() - 0.7) * 6;
+                this.size = Math.random() * 5 + 3;
+                this.color = color;
+                this.alpha = 1;
+                this.gravity = 0.15;
+            }
+
+            update() {
+                this.x += this.vx;
+                this.y += this.vy;
+                this.vy += this.gravity;
+                this.alpha -= 0.025;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.fillStyle = this.color;
+                ctx.beginPath();
+                ctx.arc(this.x, this.y, this.size, 0, Math.PI * 2);
+                ctx.fill();
+                ctx.restore();
+            }
+        }
+
+        // Texto flutuante de pontos
+        class FloatingText {
+            constructor(x, y, text, color) {
+                this.x = x;
+                this.y = y;
+                this.text = text;
+                this.color = color;
+                this.alpha = 1;
+                this.vy = -1.5;
+            }
+
+            update() {
+                this.y += this.vy;
+                this.alpha -= 0.02;
+            }
+
+            draw() {
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, this.alpha);
+                ctx.font = 'bold 20px Fredoka, sans-serif';
+                ctx.fillStyle = this.color;
+                ctx.strokeStyle = '#ffffff';
+                ctx.lineWidth = 3;
+                ctx.textAlign = 'center';
+                ctx.strokeText(this.text, this.x, this.y);
+                ctx.fillText(this.text, this.x, this.y);
+                ctx.restore();
+            }
+        }
+
+        let bgAngle = 0;
+        function drawBackground() {
+            bgAngle += 0.01;
+
+            const skyGradient = ctx.createLinearGradient(0, 0, 0, canvas.height);
+            skyGradient.addColorStop(0, '#7dd3fc');
+            skyGradient.addColorStop(0.5, '#bae6fd');
+            skyGradient.addColorStop(0.85, '#e0f2fe');
+            skyGradient.addColorStop(1, '#fef3c7');
+            ctx.fillStyle = skyGradient;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Raios de sol
+            ctx.save();
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.12)';
+            const centerX = canvas.width / 2;
+            for (let i = 0; i < 6; i++) {
+                ctx.beginPath();
+                ctx.moveTo(centerX, -20);
+                const angle = bgAngle * 0.2 + (i * Math.PI) / 3;
+                ctx.lineTo(centerX + Math.cos(angle) * canvas.width * 1.5, canvas.height);
+                ctx.lineTo(centerX + Math.cos(angle + 0.2) * canvas.width * 1.5, canvas.height);
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.restore();
+
+            // Nuvens
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.65)';
+            drawCloud(50 + Math.sin(bgAngle * 0.5) * 15, 60, 35);
+            drawCloud(canvas.width - 80 + Math.cos(bgAngle * 0.4) * 15, 90, 45);
+
+            // Colinas
+            ctx.fillStyle = '#a7f3d0';
+            ctx.beginPath();
+            ctx.moveTo(0, canvas.height - 30);
+            ctx.quadraticCurveTo(canvas.width * 0.3, canvas.height - 70, canvas.width * 0.6, canvas.height - 40);
+            ctx.quadraticCurveTo(canvas.width * 0.85, canvas.height - 20, canvas.width, canvas.height - 35);
+            ctx.lineTo(canvas.width, canvas.height);
+            ctx.lineTo(0, canvas.height);
+            ctx.fill();
+        }
+
+        function drawCloud(x, y, radius) {
+            ctx.beginPath();
+            ctx.arc(x, y, radius, 0, Math.PI * 2);
+            ctx.arc(x + radius * 0.7, y - radius * 0.2, radius * 0.75, 0, Math.PI * 2);
+            ctx.arc(x - radius * 0.7, y - radius * 0.1, radius * 0.65, 0, Math.PI * 2);
+            ctx.fill();
+        }
+
+        function handleSpawning() {
+            spawnTimer++;
+            if (spawnTimer >= spawnInterval) {
+                spawnTimer = 0;
+                items.push(new Item());
+
+                if (spawnInterval > 35) spawnInterval -= 0.3;
+                baseFallSpeed += 0.005;
+            }
+        }
+
+        function updateGame() {
+            basket.update();
+
+            for (let i = items.length - 1; i >= 0; i--) {
+                const item = items[i];
+                item.update();
+
+                const basketTop = basket.y - basket.height / 2;
+                const basketLeft = basket.x - basket.width / 2;
+                const basketRight = basket.x + basket.width / 2;
+
+                if (
+                    item.y + item.size / 2 >= basketTop &&
+                    item.y - item.size / 2 <= basketTop + 15 &&
+                    item.x >= basketLeft - 10 &&
+                    item.x <= basketRight + 10
+                ) {
+                    if (item.info.type === 'rock') {
+                        combo = 1;
+                        lives--;
+                        playSound('miss');
+                        createParticles(item.x, item.y, '#64748b', 12);
+                        floatingTexts.push(new FloatingText(item.x, item.y, '-1 Vida 💔', '#ef4444'));
+                    } else {
+                        const earnedPoints = item.info.points * combo;
+                        score += earnedPoints;
+
+                        combo++;
+                        if (combo > maxCombo) maxCombo = combo;
+
+                        if (item.info.type === 'golden') {
+                            playSound('bonus');
+                            createParticles(item.x, item.y, '#fbbf24', 20);
+                            floatingTexts.push(new FloatingText(item.x, item.y, `+${earnedPoints} Multiplicado! ✨`, '#d97706'));
+                        } else {
+                            playSound('catch', item.info.type === 'fish' ? 'E5' : 'C5');
+                            createParticles(item.x, item.y, item.info.color, 10);
+                            floatingTexts.push(new FloatingText(item.x, item.y, `+${earnedPoints}`, '#15803d'));
+                        }
+                    }
+
+                    scoreDisplay.innerText = score;
+                    comboDisplay.innerText = `x${combo}`;
+                    updateLivesUI();
+
+                    items.splice(i, 1);
+                    continue;
+                }
+
+                if (item.y > canvas.height + 20) {
+                    if (item.info.type !== 'rock') {
+                        lives--;
+                        combo = 1;
+                        playSound('miss');
+                        floatingTexts.push(new FloatingText(item.x, canvas.height - 40, 'Perdeu! 💔', '#dc2626'));
+                        updateLivesUI();
+                    }
+
+                    items.splice(i, 1);
+
+                    if (lives <= 0) {
+                        endGame();
+                        return;
+                    }
+                }
+            }
+
+            for (let i = particles.length - 1; i >= 0; i--) {
+                particles[i].update();
+                if (particles[i].alpha <= 0) particles.splice(i, 1);
+            }
+
+            for (let i = floatingTexts.length - 1; i >= 0; i--) {
+                floatingTexts[i].update();
+                if (floatingTexts[i].alpha <= 0) floatingTexts.splice(i, 1);
+            }
+        }
+
+        function createParticles(x, y, color, count = 10) {
+            for (let i = 0; i < count; i++) {
+                particles.push(new Particle(x, y, color));
+            }
+        }
+
+        function updateLivesUI() {
+            let hearts = '';
+            for (let i = 0; i < 3; i++) {
+                hearts += i < lives ? '❤️' : '🖤';
+            }
+            livesDisplay.innerText = hearts;
+        }
+
+        // Loop Principal
+        function gameLoop() {
+            if (!gameRunning) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            drawBackground();
+            handleSpawning();
+            updateGame();
+
+            items.forEach(item => item.draw());
+            basket.draw();
+            particles.forEach(p => p.draw());
+            floatingTexts.forEach(ft => ft.draw());
+
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        function handleMove(clientX) {
+            const rect = canvas.getBoundingClientRect();
+            basket.targetX = clientX - rect.left;
+        }
+
+        canvas.addEventListener('touchmove', (e) => {
+            if (e.touches.length > 0) handleMove(e.touches[0].clientX);
+        }, { passive: true });
+
+        canvas.addEventListener('touchstart', (e) => {
+            if (e.touches.length > 0) handleMove(e.touches[0].clientX);
+        }, { passive: true });
+
+        canvas.addEventListener('mousemove', (e) => handleMove(e.clientX));
+
+        let btnInterval = null;
+        function startButtonMove(direction) {
+            if (btnInterval) clearInterval(btnInterval);
+            basket.dx = direction * basket.speed;
+            btnInterval = setInterval(() => {
+                basket.targetX += direction * 18;
+            }, 20);
+        }
+
+        function stopButtonMove() {
+            if (btnInterval) clearInterval(btnInterval);
+            basket.dx = 0;
+        }
+
+        btnLeft.addEventListener('touchstart', (e) => { e.preventDefault(); startButtonMove(-1); });
+        btnLeft.addEventListener('touchend', stopButtonMove);
+        btnLeft.addEventListener('mousedown', () => startButtonMove(-1));
+        btnLeft.addEventListener('mouseup', stopButtonMove);
+
+        btnRight.addEventListener('touchstart', (e) => { e.preventDefault(); startButtonMove(1); });
+        btnRight.addEventListener('touchend', stopButtonMove);
+        btnRight.addEventListener('mousedown', () => startButtonMove(1));
+        btnRight.addEventListener('mouseup', stopButtonMove);
+
+        window.addEventListener('keydown', (e) => {
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') {
+                basket.targetX -= 25;
+            } else if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') {
+                basket.targetX += 25;
+            }
+        });
+
+        function startGame() {
+            initAudio();
+            playBgMusic();
+
+            score = 0;
+            lives = 3;
+            combo = 1;
+            maxCombo = 1;
+            items = [];
+            particles = [];
+            floatingTexts = [];
+            spawnInterval = 85;
+            baseFallSpeed = 2.5;
+
+            scoreDisplay.innerText = '0';
+            comboDisplay.innerText = 'x1';
+            updateLivesUI();
+
+            basket.x = canvas.width / 2;
+            basket.targetX = canvas.width / 2;
+
+            overlay.classList.add('opacity-0', 'pointer-events-none');
+            setTimeout(() => {
+                overlay.classList.add('hidden');
+            }, 300);
+
+            gameRunning = true;
+
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = requestAnimationFrame(gameLoop);
+        }
+
+        function endGame() {
+            gameRunning = false;
+            playSound('gameover');
+            stopBgMusic();
+
+            if (score > highScore) {
+                highScore = score;
+                localStorage.setItem('multiplicacao_highscore', highScore.toString());
+                highScoreDisplay.innerText = highScore;
+            }
+
+            titleText.innerText = 'Fim da Partida!';
+            descText.innerText = 'Você ajudou a alimentar muitas pessoas hoje!';
+            finalScore.innerText = score;
+            comboMaxText.innerText = `Maior Combo Alcançado: x${maxCombo}`;
+            finalScoreContainer.classList.remove('hidden');
+            startBtn.innerText = 'Jogar Novamente';
+
+            overlay.classList.remove('hidden');
+            setTimeout(() => {
+                overlay.classList.remove('opacity-0', 'pointer-events-none');
+            }, 50);
+        }
+
+        startBtn.addEventListener('click', startGame);
+
+        window.onload = () => {
+            resizeCanvas();
+            basket.x = canvas.width / 2;
+            basket.targetX = canvas.width / 2;
+            drawBackground();
+            basket.draw();
+        };
+    </script>
+</body>
+</html>
